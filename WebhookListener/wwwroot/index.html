@@ -1,0 +1,225 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Webhook Events</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.7.1/css/bulma.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.css" />
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+</head>
+<body class="has-navbar-fixed-top">
+    <div id="app">
+        <nav class="navbar is-light is-fixed-top" role="navigation" aria-label="dropdown navigation">
+            <div class="navbar-brand">
+                <span class="navbar-item">Webhook requests</span>
+                <span class="navbar-item">
+                    <span v-if="connected" class="tag is-success">Connected</span>
+                    <span v-else class="tag is-danger">Disconnected</span>
+                </span>                
+            </div>
+            <div class="navbar-menu">
+                <div class="navbar-start">
+
+                </div>
+                <div class="navbar-end">
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">{{ currentFilter }}</a>
+                        <div class="navbar-dropdown">
+                            <a class="navbar-item" @click="setFilter(null)">All events ({{ eventCount }})</a>
+                            <hr class="navbar-divider">
+                            <a class="navbar-item" v-for="(eventTypeCount, eventType) in types" @click="setFilter(eventType)">
+                                {{ eventType }} ({{ eventTypeCount }})
+                            </a>
+                        </div>
+                        
+                    </div>
+                    <div class="navbar-item">
+                        <div class="field is-grouped">
+                            <a class="button is-small is-warning" @click="clearAll">Clear all events</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+        <section class="section">
+            <div class="container">
+                <table id="events" class="table is-fullwidth">
+                    <thead>
+                        <tr>
+                            <th>id</th>
+                            <th>type</th>
+                            <th>timestamp</th>
+                            <th>request</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="req in filteredRequests" v-bind:class="{ 'is-danger': req.aborted }">
+                            <td>
+                                <span class="tag is-light">{{ req.id }}</span>
+                                <span v-if="req.aborted" class="icon has-text-danger" title="Request was aborted (probably timeout on the client side)">
+                                    <i class="fa fa-ban" aria-hidden="true"></i>
+                                </span>
+                            </td>
+                            <td><span class="tag is-info">{{ req.type }}</span></td>
+                            <td><span class="tag is-light">{{ req.timestamp }}</span></td>
+                            <td><code>{{ req.url }}</code></td>
+                            <td>
+                                <a class="button is-light is-small" @click="openModal(req)">details</a>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal is-active" v-if="modalRequest != null">
+                <div class="modal-background"></div>
+                <div class="modal-card">
+                    <header class="modal-card-head">
+                        <p class="modal-card-title">{{ modalRequest.id }}</p>
+                        <button class="delete" aria-label="close" @click="closeModal"></button>
+                    </header>
+                    <section class="modal-card-body">
+                        <h4 class="title">Headers</h4>
+                        <pre>{{ modalRequest.headersAsText }}</pre>
+                        <br />
+                        <h4 class="title">Payload</h4>
+                        <tree-view :data="modalRequest.payload" :options="{ maxDepth: 4 }"></tree-view>
+                    </section>
+                </div>
+            </div>
+        </section>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <script src="signalr.min.js"></script>
+    <script src="vue-json-tree-view.min.js"></script>
+    <script>
+
+        Vue.use(TreeView);
+
+        class WebhookRequest {
+
+            constructor(url, headers, payload, aborted) {
+                this.url = url
+                this.headers = headers
+                this.payload = payload
+                this.aborted = aborted;
+            }
+
+            get id() {
+                return this.payload.EventId
+            }
+
+            get timestamp() {
+                return new Date(this.payload.Timestamp).toLocaleString()
+            }
+
+            get type() {
+                return this.payload.Type || "Unknown"
+            }
+
+            get headersAsText() {
+                var text = ''
+                for (var header in this.headers) {
+                    text += (header + ': ' + this.headers[header] + '\r\n')
+                }
+                return text
+            }
+        }
+
+        var app = new Vue({
+            el: '#app',
+
+            data: {
+                connected: false,
+                requests: [],
+                types: {},
+                filter: null,
+                modalRequest: null
+            },
+
+            methods: {
+
+                clearAll() {
+                    this.requests = [];
+                    this.types = {};
+                    this.setFilter(null);
+                },
+
+                addRequest(url, headers, payload, aborted) {
+                    var req = new WebhookRequest(url, headers, payload, aborted)
+                    this.requests.push(req)
+                    if (!this.types[req.type]) {
+                        this.types[req.type] = 1
+                    } else {
+                        this.types[req.type]++
+                    }
+                },
+
+                setFilter(eventType) {
+                    this.filter = eventType
+                },
+
+                closeModal() {
+                    this.modalRequest = null
+                },
+
+                openModal(req) {
+                    this.modalRequest = req
+                }
+
+            },
+
+            computed: {
+
+                filteredRequests() {
+                    var filter = this.filter;
+                    if (!filter) {
+                        return this.requests.slice().reverse()
+                    } else {
+                        return this.requests.slice().reverse().filter(function (req) {
+                            return req.type == filter
+                        })
+                    }                    
+                },
+
+                eventCount() {
+                    return this.requests.length
+                },
+
+                currentFilter() {
+                    return this.filter ? (this.filter + ' (' + this.types[this.filter] + ')') : ('All events (' + this.eventCount + ')')
+                }
+
+            }
+        })
+
+        window.$app = app
+
+        var connection = new signalR.HubConnectionBuilder()
+            .configureLogging(signalR.LogLevel.Trace)
+            .withUrl("events")
+            .build();
+
+        connection.on('message', function (message) {
+            alert(message)
+        });
+
+        connection.on('addEvent', function (url, headers, payload, aborted) {
+            app.addRequest(url, headers, payload, aborted)
+        });
+
+        connection.onclose(function (e) {
+            app.connected = false
+        });
+
+        connection.start().then(function () {
+            app.connected = true
+        });
+
+        window.$hub = connection;
+
+    </script>
+</body>
+</html>
