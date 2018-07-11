@@ -8,8 +8,11 @@ namespace WebhookListener
     {
         public static void Main(string[] args)
         {
-            var urls = Enumerable.Range(5000, 20).Select(port => $"http://*:{port}").ToArray();
-            CreateWebHostBuilder(args, urls).Build().Run();
+            var httpUrls = Enumerable.Range(5000, 10).Select(port => $"http://*:{port}");
+            var httpsUrls = Enumerable.Range(54430, 10).Select(port => $"https://*:{port}");
+
+            CreateWebHostBuilder(args, httpUrls.Concat(httpsUrls).ToArray())
+                .Build().Run();
         }
 
         public static IWebHostBuilder CreateWebHostBuilder(string[] args, string[] urls) =>
