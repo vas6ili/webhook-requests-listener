@@ -50,6 +50,7 @@
                         <tr>
                             <th>id</th>
                             <th>type</th>
+                            <th>delay</th>
                             <th>timestamp</th>
                             <th>request</th>
                             <th></th>
@@ -64,6 +65,7 @@
                                 </span>
                             </td>
                             <td><span class="tag is-info">{{ req.type }}</span></td>
+                            <td><span class="tag">{{ req.delay }}</span></td>
                             <td><span class="tag is-light">{{ req.timestamp }}</span></td>
                             <td><code>{{ req.url }}</code></td>
                             <td>
@@ -105,6 +107,7 @@
                 this.headers = headers
                 this.payload = payload
                 this.aborted = aborted;
+                this.delayMilliseconds = (new Date() - new Date(this.payload.Timestamp));
             }
 
             get id() {
@@ -125,6 +128,16 @@
                     text += (header + ': ' + this.headers[header] + '\r\n')
                 }
                 return text
+            }
+
+            get delay() {
+                if (this.delayMilliseconds < 1000) {
+                    return this.delayMilliseconds + " ms"
+                } else if (this.delayMilliseconds < 3 * 60 * 1000) {
+                    return (this.delayMilliseconds / 1000) + " sec";
+                } else {
+                    return (this.delayMilliseconds / 60000) + " min";
+                }
             }
         }
 
@@ -198,7 +211,7 @@
         window.$app = app
 
         var connection = new signalR.HubConnectionBuilder()
-            .configureLogging(signalR.LogLevel.Trace)
+            .configureLogging(signalR.LogLevel.Warning)
             .withUrl("events")
             .build();
 

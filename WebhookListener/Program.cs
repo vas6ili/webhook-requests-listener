@@ -1,6 +1,7 @@
-﻿using System.Linq;
-using Microsoft.AspNetCore;
+﻿using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Logging;
+using System.Linq;
 
 namespace WebhookListener
 {
@@ -18,6 +19,7 @@ namespace WebhookListener
         public static IWebHostBuilder CreateWebHostBuilder(string[] args, string[] urls) =>
             WebHost.CreateDefaultBuilder(args)
                 .UseUrls(urls)
+                .ConfigureLogging(logging => logging.SetMinimumLevel(LogLevel.Warning))
                 .UseStartup<Startup>();
     }
 }
